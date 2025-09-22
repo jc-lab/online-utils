@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HAR to Markdown Converter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            padding: 30px 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.1rem;
+        }
+
+        .main-content {
+            padding: 40px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+
+        .upload-section, .filter-section, .output-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .upload-section:hover, .filter-section:hover, .output-section:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .file-drop {
+            border: 3px dashed #4facfe;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .file-drop:hover {
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.2) 0%, rgba(0, 242, 254, 0.2) 100%);
+            transform: scale(1.02);
+        }
+
+        .file-drop.drag-over {
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.3) 0%, rgba(0, 242, 254, 0.3) 100%);
+            border-color: #00f2fe;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .filter-group {
+            margin-bottom: 25px;
+        }
+
+        .filter-label {
+            display: block;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 8px;
+        }
+
+        .filter-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .filter-input:focus {
+            outline: none;
+            border-color: #4facfe;
+            box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+        }
+
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 15px;
+            background: #f8fafc;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #4facfe;
+        }
+
+        .request-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            background: #f8fafc;
+        }
+
+        .request-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+            transition: background-color 0.2s ease;
+        }
+
+        .request-item:hover {
+            background: rgba(79, 172, 254, 0.05);
+        }
+
+        .request-item:last-child {
+            border-bottom: none;
+        }
+
+        .method-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .method-GET { background: #10b981; }
+        .method-POST { background: #3b82f6; }
+        .method-PUT { background: #f59e0b; }
+        .method-DELETE { background: #ef4444; }
+        .method-PATCH { background: #8b5cf6; }
+
+        .url-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .url-path {
+            font-weight: 500;
+            color: #2d3748;
+            word-break: break-all;
+        }
+
+        .url-host {
+            font-size: 0.9rem;
+            color: #718096;
+        }
+
+        .markdown-output {
+            grid-column: 1 / -1;
+            background: #1a202c;
+            color: #e2e8f0;
+            border-radius: 15px;
+            padding: 30px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .copy-button {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .copy-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 172, 254, 0.3);
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%);
+            padding: 15px 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #4facfe;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #718096;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #4facfe;
+            font-size: 1.1rem;
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 20px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .checkbox-group {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <h1>🔄 HAR to Markdown Converter</h1>
+                <p>Chrome HAR 파일을 분석하고 Markdown 형식으로 변환합니다</p>
+            </div>
+
+            <div class="main-content">
+                <!-- 파일 업로드 섹션 -->
+                <div class="upload-section">
+                    <h2 class="section-title">📁 HAR 파일 업로드</h2>
+                    <div 
+                        class="file-drop"
+                        :class="{ 'drag-over': dragOver }"
+                        @click="$refs.fileInput.click()"
+                        @dragover.prevent="dragOver = true"
+                        @dragleave.prevent="dragOver = false"
+                        @drop.prevent="handleFileDrop"
+                    >
+                        <div v-if="!harData">
+                            <div style="font-size: 3rem; margin-bottom: 15px;">📎</div>
+                            <p style="font-size: 1.2rem; font-weight: 600; color: #4facfe; margin-bottom: 10px;">
+                                HAR 파일을 드래그하거나 클릭하여 업로드
+                            </p>
+                            <p style="color: #718096;">Chrome DevTools > Network > Export HAR</p>
+                        </div>
+                        <div v-else>
+                            <div style="font-size: 3rem; margin-bottom: 15px;">✅</div>
+                            <p style="font-size: 1.2rem; font-weight: 600; color: #10b981;">
+                                HAR 파일 로드 완료
+                            </p>
+                            <p style="color: #718096;">{{ harData.log.entries.length }}개의 요청 발견</p>
+                        </div>
+                    </div>
+                    <input 
+                        ref="fileInput"
+                        type="file"
+                        accept=".har"
+                        class="file-input"
+                        @change="handleFileSelect"
+                    >
+
+                    <!-- 통계 정보 -->
+                    <div v-if="harData" class="stats">
+                        <div class="stat-item">
+                            <div class="stat-number">{{ harData.log.entries.length }}</div>
+                            <div class="stat-label">전체 요청</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">{{ filteredRequests.length }}</div>
+                            <div class="stat-label">필터링된 요청</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">{{ selectedRequests.length }}</div>
+                            <div class="stat-label">선택된 요청</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 필터링 섹션 -->
+                <div v-if="harData" class="filter-section">
+                    <h2 class="section-title">🔍 필터링 옵션</h2>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">URL 패턴 (정규식)</label>
+                        <input 
+                            v-model="filters.urlPattern"
+                            type="text"
+                            class="filter-input"
+                            placeholder="예: .*api.*"
+                        >
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="filter-label">Content Type</label>
+                        <input 
+                            v-model="filters.contentType"
+                            type="text"
+                            class="filter-input"
+                            placeholder="예: application/json"
+                        >
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="filter-label">HTTP 메서드</label>
+                        <div class="checkbox-group">
+                            <div v-for="method in availableMethods" :key="method" class="checkbox-item">
+                                <input 
+                                    type="checkbox"
+                                    :id="'method-' + method"
+                                    v-model="filters.methods"
+                                    :value="method"
+                                >
+                                <label :for="'method-' + method">{{ method }}</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="filter-label">출력할 헤더 선택</label>
+                        <div class="checkbox-group">
+                            <div v-for="header in availableHeaders" :key="header" class="checkbox-item">
+                                <input 
+                                    type="checkbox"
+                                    :id="'header-' + header"
+                                    v-model="selectedHeaders"
+                                    :value="header"
+                                >
+                                <label :for="'header-' + header">{{ header }}</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 요청 목록 선택 섹션 -->
+                <div v-if="filteredRequests.length > 0" class="upload-section">
+                    <h2 class="section-title">📋 요청 목록</h2>
+                    <div class="request-list">
+                        <div v-for="(request, index) in filteredRequests" :key="index" class="request-item">
+                            <input 
+                                type="checkbox"
+                                :id="'request-' + index"
+                                v-model="selectedRequests"
+                                :value="request"
+                                @change="generateMarkdown"
+                            >
+                            <span :class="'method-badge method-' + request.method">
+                                {{ request.method }}
+                            </span>
+                            <div class="url-info">
+                                <div class="url-path">{{ getUrlPath(request.url) }}</div>
+                                <div class="url-host">{{ getUrlHost(request.url) }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Markdown 출력 섹션 -->
+                <div v-if="markdownOutput" class="output-section">
+                    <h2 class="section-title">📝 Markdown 출력</h2>
+                    <button @click="copyToClipboard" class="copy-button">📋 클립보드에 복사</button>
+                    <div class="markdown-output">{{ markdownOutput }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    harData: null,
+                    dragOver: false,
+                    filters: {
+                        urlPattern: '',
+                        contentType: '',
+                        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
+                    },
+                    selectedHeaders: ['Content-Type', 'Authorization', 'Accept', 'User-Agent'],
+                    selectedRequests: [],
+                    markdownOutput: ''
+                }
+            },
+            computed: {
+                availableMethods() {
+                    if (!this.harData) return [];
+                    const methods = new Set();
+                    this.harData.log.entries.forEach(entry => {
+                        methods.add(entry.request.method);
+                    });
+                    return Array.from(methods).sort();
+                },
+                availableHeaders() {
+                    if (!this.harData) return [];
+                    const headers = new Set();
+                    this.harData.log.entries.forEach(entry => {
+                        entry.request.headers.forEach(header => {
+                            headers.add(header.name);
+                        });
+                        entry.response.headers.forEach(header => {
+                            headers.add(header.name);
+                        });
+                    });
+                    return Array.from(headers).sort();
+                },
+                filteredRequests() {
+                    if (!this.harData) return [];
+                    
+                    let requests = this.harData.log.entries.map(entry => ({
+                        method: entry.request.method,
+                        url: entry.request.url,
+                        headers: entry.request.headers,
+                        responseHeaders: entry.response.headers,
+                        status: entry.response.status,
+                        statusText: entry.response.statusText,
+                        postData: entry.request.postData,
+                        responseContent: entry.response.content,
+                        time: entry.time
+                    }));
+
+                    // URL 패턴 필터
+                    if (this.filters.urlPattern) {
+                        try {
+                            const regex = new RegExp(this.filters.urlPattern, 'i');
+                            requests = requests.filter(req => regex.test(req.url));
+                        } catch (e) {
+                            // 잘못된 정규식인 경우 무시
+                        }
+                    }
+
+                    // Content Type 필터
+                    if (this.filters.contentType) {
+                        requests = requests.filter(req => {
+                            const contentType = req.headers.find(h => h.name.toLowerCase() === 'content-type');
+                            return contentType && contentType.value.toLowerCase().includes(this.filters.contentType.toLowerCase());
+                        });
+                    }
+
+                    // 메서드 필터
+                    requests = requests.filter(req => this.filters.methods.includes(req.method));
+
+                    return requests;
+                }
+            },
+            watch: {
+                filteredRequests: {
+                    handler(newRequests) {
+                        // 필터링이 변경되면 선택된 요청들 중 더 이상 필터에 맞지 않는 것들 제거
+                        this.selectedRequests = this.selectedRequests.filter(selected => 
+                            newRequests.some(filtered => 
+                                filtered.url === selected.url && filtered.method === selected.method
+                            )
+                        );
+                        this.generateMarkdown();
+                    },
+                    deep: true
+                },
+                selectedHeaders() {
+                    this.generateMarkdown();
+                }
+            },
+            methods: {
+                handleFileDrop(e) {
+                    this.dragOver = false;
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        this.loadHarFile(files[0]);
+                    }
+                },
+                handleFileSelect(e) {
+                    if (e.target.files.length > 0) {
+                        this.loadHarFile(e.target.files[0]);
+                    }
+                },
+                async loadHarFile(file) {
+                    try {
+                        const text = await file.text();
+                        this.harData = JSON.parse(text);
+                        // 초기에는 모든 요청을 선택
+                        this.$nextTick(() => {
+                            this.selectedRequests = [...this.filteredRequests];
+                            this.generateMarkdown();
+                        });
+                    } catch (error) {
+                        alert('HAR 파일을 읽는 중 오류가 발생했습니다: ' + error.message);
+                    }
+                },
+                getUrlPath(url) {
+                    try {
+                        const urlObj = new URL(url);
+                        return urlObj.pathname + urlObj.search;
+                    } catch {
+                        return url;
+                    }
+                },
+                getUrlHost(url) {
+                    try {
+                        const urlObj = new URL(url);
+                        return urlObj.host;
+                    } catch {
+                        return '';
+                    }
+                },
+                generateMarkdown() {
+                    if (this.selectedRequests.length === 0) {
+                        this.markdownOutput = '';
+                        return;
+                    }
+
+                    let markdown = '# HTTP Requests Documentation\n\n';
+                    
+                    this.selectedRequests.forEach((request, index) => {
+                        markdown += `## ${index + 1}. ${request.method} ${request.url}\n\n`;
+                        
+                        markdown += `**Status:** ${request.status} ${request.statusText}\n\n`;
+                        
+                        // Request Headers
+                        const requestHeaders = request.headers.filter(h => 
+                            this.selectedHeaders.some(selected => 
+                                selected.toLowerCase() === h.name.toLowerCase()
+                            )
+                        );
+                        if (requestHeaders.length > 0) {
+                            markdown += `### Request Headers\n\n`;
+                            requestHeaders.forEach(header => {
+                                markdown += `- **${header.name}:** ${header.value}\n`;
+                            });
+                            markdown += '\n';
+                        }
+
+                        // Response Headers
+                        const responseHeaders = request.responseHeaders.filter(h => 
+                            this.selectedHeaders.some(selected => 
+                                selected.toLowerCase() === h.name.toLowerCase()
+                            )
+                        );
+                        if (responseHeaders.length > 0) {
+                            markdown += `### Response Headers\n\n`;
+                            responseHeaders.forEach(header => {
+                                markdown += `- **${header.name}:** ${header.value}\n`;
+                            });
+                            markdown += '\n';
+                        }
+
+                        // Request Body
+                        if (request.postData && request.postData.text) {
+                            markdown += `### Request Body\n\n`;
+                            markdown += '```json\n';
+                            try {
+                                const jsonData = JSON.parse(request.postData.text);
+                                markdown += JSON.stringify(jsonData, null, 2);
+                            } catch {
+                                markdown += request.postData.text;
+                            }
+                            markdown += '\n```\n\n';
+                        }
+
+                        // Response Body (첫 1000자만)
+                        if (request.responseContent && request.responseContent.text) {
+                            markdown += `### Response Body\n\n`;
+                            markdown += '```json\n';
+                            let responseText = request.responseContent.text;
+                            if (responseText.length > 1000) {
+                                responseText = responseText.substring(0, 1000) + '\n... (truncated)';
+                            }
+                            try {
+                                const jsonData = JSON.parse(request.responseContent.text);
+                                const truncatedJson = JSON.stringify(jsonData, null, 2);
+                                markdown += truncatedJson.length > 1000 ? 
+                                    truncatedJson.substring(0, 1000) + '\n... (truncated)' : 
+                                    truncatedJson;
+                            } catch {
+                                markdown += responseText;
+                            }
+                            markdown += '\n```\n\n';
+                        }
+
+                        markdown += '---\n\n';
+                    });
+
+                    this.markdownOutput = markdown;
+                },
+                async copyToClipboard() {
+                    try {
+                        await navigator.clipboard.writeText(this.markdownOutput);
+                        // 간단한 피드백
+                        const button = event.target;
+                        const originalText = button.textContent;
+                        button.textContent = '✅ 복사됨!';
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                        }, 2000);
+                    } catch (error) {
+                        alert('클립보드 복사 중 오류가 발생했습니다.');
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
