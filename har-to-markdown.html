@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HAR to Markdown Converter</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+    <script src="./har-parser-worker.js"></script>
     <style>
         * {
             margin: 0;
@@ -389,13 +390,28 @@
                         <label class="filter-label">HTTP 메서드</label>
                         <div class="checkbox-group">
                             <div v-for="method in availableMethods" :key="method" class="checkbox-item">
-                                <input 
+                                <input
                                     type="checkbox"
                                     :id="'method-' + method"
                                     v-model="filters.methods"
                                     :value="method"
                                 >
                                 <label :for="'method-' + method">{{ method }}</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="filter-label">리소스 타입</label>
+                        <div class="checkbox-group">
+                            <div v-for="type in ['Fetch/XHR', 'Doc', 'CSS', 'JS', 'Font', 'Img', 'Media', 'Manifest', 'Socket', 'Wasm', 'Other']" :key="type" class="checkbox-item">
+                                <input
+                                    type="checkbox"
+                                    :id="'type-' + type"
+                                    v-model="filters.resourceTypes"
+                                    :value="type"
+                                >
+                                <label :for="'type-' + type">{{ type }}</label>
                             </div>
                         </div>
                     </div>
@@ -419,6 +435,17 @@
                 <!-- 요청 목록 선택 섹션 -->
                 <div v-if="filteredRequests.length > 0" class="upload-section">
                     <h2 class="section-title">📋 요청 목록</h2>
+                    <div style="margin-bottom: 15px;">
+                        <label class="checkbox-item" style="padding: 10px; background: #f8fafc; border-radius: 10px;">
+                            <input
+                                type="checkbox"
+                                :id="'select-all'"
+                                :checked="selectedRequests.length === filteredRequests.length && filteredRequests.length > 0"
+                                @change="toggleSelectAll"
+                            >
+                            <label :for="'select-all'" style="font-weight: 600;">모든 요청 선택/해제</label>
+                        </label>
+                    </div>
                     <div class="request-list">
                         <div v-for="(request, index) in filteredRequests" :key="index" class="request-item">
                             <input 
@@ -457,10 +484,14 @@
                 return {
                     harData: null,
                     dragOver: false,
+                    availableMethods: [],
+                    availableHeaders: [],
                     filters: {
                         urlPattern: '',
                         contentType: '',
-                        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
+                        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+                        // resourceTypes: ['Fetch/XHR', 'Doc', 'CSS', 'JS', 'Font', 'Img', 'Media', 'Manifest', 'Socket', 'Wasm', 'Other'],
+                        resourceTypes: ['Fetch/XHR', 'Doc', 'Other'],
                     },
                     selectedHeaders: ['Content-Type', 'Authorization', 'Accept', 'User-Agent'],
                     selectedRequests: [],
@@ -468,27 +499,6 @@
                 }
             },
             computed: {
-                availableMethods() {
-                    if (!this.harData) return [];
-                    const methods = new Set();
-                    this.harData.log.entries.forEach(entry => {
-                        methods.add(entry.request.method);
-                    });
-                    return Array.from(methods).sort();
-                },
-                availableHeaders() {
-                    if (!this.harData) return [];
-                    const headers = new Set();
-                    this.harData.log.entries.forEach(entry => {
-                        entry.request.headers.forEach(header => {
-                            headers.add(header.name);
-                        });
-                        entry.response.headers.forEach(header => {
-                            headers.add(header.name);
-                        });
-                    });
-                    return Array.from(headers).sort();
-                },
                 filteredRequests() {
                     if (!this.harData) return [];
                     
@@ -501,7 +511,10 @@
                         statusText: entry.response.statusText,
                         postData: entry.request.postData,
                         responseContent: entry.response.content,
-                        time: entry.time
+                        time: entry.time,
+                        resourceType: this.getResourceType({
+                            responseHeaders: entry.response.headers
+                        })
                     }));
 
                     // URL 패턴 필터
@@ -522,8 +535,12 @@
                         });
                     }
 
-                    // 메서드 필터
-                    requests = requests.filter(req => this.filters.methods.includes(req.method));
+                    requests = requests.filter(req => 
+                        // 메서드 필터
+                        this.filters.methods.includes(req.method) && 
+                        // 리소스 타입 필터
+                        this.filters.resourceTypes.includes(req.resourceType)
+                    );
 
                     return requests;
                 }
@@ -559,16 +576,53 @@
                     }
                 },
                 async loadHarFile(file) {
+                    const text = await file.text();
+
                     try {
-                        const text = await file.text();
-                        this.harData = JSON.parse(text);
+                        if (window.Worker) {
+                            // Web Worker 사용
+                            const worker = new Worker('./har-parser-worker.js');
+                            worker.postMessage({ harText: text });
+                            worker.onmessage = (e) => {
+                                const { success, harData, availableMethods, availableHeaders, error } = e.data;
+                                if (success) {
+                                    this.harData = harData;
+                                    this.availableMethods = availableMethods;
+                                    this.availableHeaders = availableHeaders;
+                                    // 초기에는 모든 요청을 선택
+                                    this.$nextTick(() => {
+                                        this.selectedRequests = [...this.filteredRequests];
+                                        this.generateMarkdown();
+                                    });
+                                } else {
+                                    alert('HAR 파일을 파싱하는 중 오류가 발생했습니다: ' + error);
+                                }
+                                worker.terminate();
+                            };
+                            worker.onerror = (error) => {
+                                alert('Worker 오류: ' + error.message);
+                                worker.terminate();
+                            };
+                            return;
+                        }
+                    } catch (error) {
+                        console.log('worker failed:', error);
+                    }
+
+                    // Worker를 사용할 수 없으면 직접 함수 호출
+                    const result = window.parseHar(text);
+                    console.log('result: ', result);
+                    if (result.success) {
+                        this.harData = result.harData;
+                        this.availableMethods = result.availableMethods;
+                        this.availableHeaders = result.availableHeaders;
                         // 초기에는 모든 요청을 선택
                         this.$nextTick(() => {
                             this.selectedRequests = [...this.filteredRequests];
                             this.generateMarkdown();
                         });
-                    } catch (error) {
-                        alert('HAR 파일을 읽는 중 오류가 발생했습니다: ' + error.message);
+                    } else {
+                        alert('HAR 파일을 파싱하는 중 오류가 발생했습니다: ' + result.error);
                     }
                 },
                 getUrlPath(url) {
@@ -586,6 +640,42 @@
                     } catch {
                         return '';
                     }
+                },
+                getResourceType(request) {
+                    // Content-Type으로 리소스 타입 결정
+                    const contentType = request.responseHeaders.find(h =>
+                        h.name.toLowerCase() === 'content-type'
+                    );
+                    if (!contentType) return 'Other';
+
+                    const type = contentType.value.toLowerCase();
+
+                    if (type.includes('text/html')) return 'Doc';
+                    if (type.includes('text/css')) return 'CSS';
+                    if (type.includes('text/javascript') || type.includes('application/javascript')) return 'JS';
+                    if (type.includes('font/') || type.includes('application/font-')) return 'Font';
+                    if (type.includes('image/')) return 'Img';
+                    if (type.includes('video/') || type.includes('audio/')) return 'Media';
+                    if (type.includes('application/manifest+json')) return 'Manifest';
+                    if (type.includes('application/wasm')) return 'Wasm';
+                    if (type.includes('websocket')) return 'Socket';
+
+                    // Fetch/XHR: JSON, XML, plain text 등 API 요청으로 가정
+                    if (type.includes('application/json') || type.includes('application/xml') || type.includes('text/plain')) {
+                        return 'Fetch/XHR';
+                    }
+
+                    return 'Other';
+                },
+                toggleSelectAll() {
+                    if (this.selectedRequests.length === this.filteredRequests.length) {
+                        // 모두 선택된 상태면 모두 해제
+                        this.selectedRequests = [];
+                    } else {
+                        // 아니면 모두 선택
+                        this.selectedRequests = [...this.filteredRequests];
+                    }
+                    this.generateMarkdown();
                 },
                 generateMarkdown() {
                     if (this.selectedRequests.length === 0) {
@@ -646,15 +736,11 @@
                             markdown += `### Response Body\n\n`;
                             markdown += '```json\n';
                             let responseText = request.responseContent.text;
-                            if (responseText.length > 1000) {
-                                responseText = responseText.substring(0, 1000) + '\n... (truncated)';
-                            }
+                            responseText = responseText;
                             try {
                                 const jsonData = JSON.parse(request.responseContent.text);
                                 const truncatedJson = JSON.stringify(jsonData, null, 2);
-                                markdown += truncatedJson.length > 1000 ? 
-                                    truncatedJson.substring(0, 1000) + '\n... (truncated)' : 
-                                    truncatedJson;
+                                markdown += truncatedJson;
                             } catch {
                                 markdown += responseText;
                             }
