@@ -59,14 +59,11 @@ function parseHar(harText) {
     }
 }
 
-if (typeof self !== 'undefined' && self.onmessage) {
+if (typeof window === 'undefined') {
     // Web Worker 환경
     self.onmessage = function(e) {
         const { harText } = e.data;
         const result = parseHar(harText);
         self.postMessage(result);
     };
-} else {
-    // 직접 호출 환경 (window에 함수 등록)
-    window.parseHar = parseHar;
 }
