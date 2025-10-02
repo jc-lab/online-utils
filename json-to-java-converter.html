@@ -181,6 +181,45 @@
             margin-top: 10px;
             font-size: 14px;
         }
+        
+        .mapping-item {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        
+        .mapping-item span {
+            flex: 1;
+            padding: 8px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+        }
+        
+        .mapping-item button {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .mapping-item button:hover {
+            background: #d32f2f;
+        }
+        
+        input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -201,6 +240,13 @@
                 <textarea id="jsonInput" placeholder='{"name": "John", "age": 30, "items": [{"id": 1}]}'></textarea>
             </div>
             
+            <div class="input-group">
+                <label>
+                    <input type="checkbox" id="anonymizeCheckbox" onchange="toggleAnonymization()">
+                    예시 값 익명화
+                </label>
+            </div>
+            
             <div class="btn-container">
                 <button class="btn" onclick="generateJavaClass()">Java Class 생성</button>
             </div>
@@ -214,10 +260,205 @@
                 </div>
                 <div class="output-code" id="outputCode"></div>
             </div>
+            
+            <div id="anonymizeSettings" style="display: none; margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 8px; border: 2px solid #667eea;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h4 style="margin: 0; color: #333;">익명화 매핑 설정</h4>
+                    <div>
+                        <button class="copy-btn" onclick="exportMappings()" style="margin-right: 8px;">Export</button>
+                        <button class="copy-btn" onclick="importMappings()">Import</button>
+                    </div>
+                </div>
+                
+                <div id="mappingsList"></div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <input type="text" id="originalValue" placeholder="원본 값" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <input type="text" id="anonymizedValue" placeholder="익명화 값" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <button class="copy-btn" onclick="addMapping()" style="background: #667eea;">추가</button>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
+        // 익명화 매핑 저장소
+        let anonymizeMappings = {};
+        
+        // 페이지 로드 시 localStorage에서 매핑 불러오기
+        window.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('anonymizeMappings');
+            if (saved) {
+                try {
+                    anonymizeMappings = JSON.parse(saved);
+                    updateMappingsList();
+                } catch (e) {
+                    console.error('Failed to load mappings:', e);
+                }
+            }
+        });
+        
+        // localStorage에 저장
+        function saveMappings() {
+            localStorage.setItem('anonymizeMappings', JSON.stringify(anonymizeMappings));
+        }
+        
+        // 익명화 토글
+        function toggleAnonymization() {
+            const checkbox = document.getElementById('anonymizeCheckbox');
+            const settings = document.getElementById('anonymizeSettings');
+            
+            // 체크박스가 체크되어 있으면 설정 표시
+            settings.style.display = checkbox.checked ? 'block' : 'none';
+        }
+        
+        // 매핑 추가
+        function addMapping() {
+            const original = document.getElementById('originalValue').value.trim();
+            const anonymized = document.getElementById('anonymizedValue').value.trim();
+            
+            if (!original || !anonymized) {
+                alert('원본 값과 익명화 값을 모두 입력해주세요.');
+                return;
+            }
+            
+            anonymizeMappings[original] = anonymized;
+            saveMappings();
+            updateMappingsList();
+            
+            document.getElementById('originalValue').value = '';
+            document.getElementById('anonymizedValue').value = '';
+        }
+        
+        // 매핑 삭제
+        function removeMapping(key) {
+            delete anonymizeMappings[key];
+            saveMappings();
+            updateMappingsList();
+        }
+        
+        // 매핑 목록 업데이트
+        function updateMappingsList() {
+            const list = document.getElementById('mappingsList');
+            if (Object.keys(anonymizeMappings).length === 0) {
+                list.innerHTML = '<p style="color: #666; font-size: 13px; text-align: center; padding: 10px;">등록된 매핑이 없습니다.</p>';
+                return;
+            }
+            
+            list.innerHTML = Object.entries(anonymizeMappings)
+                .map(([original, anonymized]) => `
+                    <div class="mapping-item">
+                        <span>${escapeHtml(original)}</span>
+                        <span style="text-align: center;">→</span>
+                        <span>${escapeHtml(anonymized)}</span>
+                        <button onclick="removeMapping('${escapeHtml(original).replace(/'/g, "\\'")}')">삭제</button>
+                    </div>
+                `).join('');
+        }
+        
+        // Export 매핑
+        function exportMappings() {
+            const dataStr = JSON.stringify(anonymizeMappings, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'anonymize-mappings.json';
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        // Import 매핑
+        function importMappings() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'application/json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const imported = JSON.parse(event.target.result);
+                        anonymizeMappings = imported;
+                        saveMappings();
+                        updateMappingsList();
+                        alert('매핑을 성공적으로 불러왔습니다.');
+                    } catch (err) {
+                        alert('JSON 파일을 읽는 중 오류가 발생했습니다.');
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+        
+        // HTML 이스케이프
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // 문자열 익명화 (대소문자/숫자 유지)
+        function anonymizeString(str) {
+            // 먼저 매핑에서 찾기
+            if (anonymizeMappings[str] !== undefined) {
+                return anonymizeMappings[str];
+            }
+            
+            // 매핑에 없으면 자동 익명화
+            let result = '';
+            for (let char of str) {
+                if (char >= 'A' && char <= 'Z') {
+                    result += String.fromCharCode(65 + Math.floor(Math.random() * 26));
+                } else if (char >= 'a' && char <= 'z') {
+                    result += String.fromCharCode(97 + Math.floor(Math.random() * 26));
+                } else if (char >= '0' && char <= '9') {
+                    result += Math.floor(Math.random() * 10);
+                } else {
+                    result += char;
+                }
+            }
+            
+            // 자동 생성된 익명화 값을 매핑에 추가
+            anonymizeMappings[str] = result;
+            saveMappings();
+            
+            return result;
+        }
+        
+        // 값 익명화 (캐시 사용)
+        const anonymizeCache = {};
+        function anonymizeValue(value) {
+            const key = String(value);
+            if (anonymizeCache[key] !== undefined) {
+                return anonymizeCache[key];
+            }
+            
+            let result;
+            if (typeof value === 'string') {
+                result = anonymizeString(value);
+            } else if (typeof value === 'number') {
+                if (anonymizeMappings[value] !== undefined) {
+                    result = anonymizeMappings[value];
+                } else {
+                    result = Number.isInteger(value) 
+                        ? Math.floor(Math.random() * 1000)
+                        : Math.random() * 1000;
+                    // 자동 생성된 익명화 값을 매핑에 추가
+                    anonymizeMappings[value] = result;
+                    saveMappings();
+                }
+            } else {
+                result = value;
+            }
+            
+            anonymizeCache[key] = result;
+            return result;
+        }
+
         function capitalize(str) {
             return str.charAt(0).toUpperCase() + str.slice(1);
         }
@@ -245,7 +486,14 @@
         }
 
         function getExampleValue(value) {
+            const isAnonymize = document.getElementById('anonymizeCheckbox').checked;
+            
             if (value === null) return 'null';
+            
+            if (isAnonymize) {
+                value = anonymizeValue(value);
+            }
+            
             if (typeof value === 'string') return `"${value}"`;
             if (typeof value === 'number') return value;
             if (typeof value === 'boolean') return value;
@@ -305,6 +553,9 @@
 
             errorContainer.innerHTML = '';
             outputSection.classList.remove('active');
+            
+            // 익명화 캐시 초기화
+            Object.keys(anonymizeCache).forEach(key => delete anonymizeCache[key]);
 
             if (!className) {
                 errorContainer.innerHTML = '<div class="error">Class Name을 입력해주세요.</div>';
@@ -322,6 +573,10 @@
                 
                 outputCode.textContent = javaCode;
                 outputSection.classList.add('active');
+                
+                // Java 클래스 생성 후 익명화 설정 UI 업데이트 및 표시
+                updateMappingsList();
+                toggleAnonymization();
             } catch (e) {
                 errorContainer.innerHTML = `<div class="error">JSON 파싱 오류: ${e.message}</div>`;
             }
