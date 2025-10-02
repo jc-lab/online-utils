@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON to Java Class Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        .input-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .input-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            resize: vertical;
+            min-height: 150px;
+            transition: border-color 0.3s;
+        }
+        
+        .input-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 40px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .output-section {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .output-section.active {
+            display: block;
+        }
+        
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .output-header h3 {
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .copy-btn {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .copy-btn:hover {
+            background: #45a049;
+        }
+        
+        .copy-btn.copied {
+            background: #2196f3;
+        }
+        
+        .output-code {
+            background: #f5f5f5;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 600px;
+            overflow-y: auto;
+            color: #333;
+        }
+        
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 JSON to Java Class Generator</h1>
+            <p>JSON을 Lombok 기반 Java Class로 변환합니다</p>
+        </div>
+        
+        <div class="content">
+            <div class="input-group">
+                <label for="className">Class Name</label>
+                <input type="text" id="className" placeholder="예: UserResponse" value="ClassName">
+            </div>
+            
+            <div class="input-group">
+                <label for="jsonInput">JSON</label>
+                <textarea id="jsonInput" placeholder='{"name": "John", "age": 30, "items": [{"id": 1}]}'></textarea>
+            </div>
+            
+            <div class="btn-container">
+                <button class="btn" onclick="generateJavaClass()">Java Class 생성</button>
+            </div>
+            
+            <div id="errorContainer"></div>
+            
+            <div class="output-section" id="outputSection">
+                <div class="output-header">
+                    <h3>생성된 Java Class</h3>
+                    <button class="copy-btn" onclick="copyToClipboard()">복사</button>
+                </div>
+                <div class="output-code" id="outputCode"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        function getJavaType(value, key) {
+            if (value === null) return 'Object';
+            if (typeof value === 'string') return 'String';
+            if (typeof value === 'number') {
+                return Number.isInteger(value) ? 'int' : 'double';
+            }
+            if (typeof value === 'boolean') return 'boolean';
+            if (Array.isArray(value)) {
+                if (value.length > 0) {
+                    const itemType = typeof value[0] === 'object' && !Array.isArray(value[0]) 
+                        ? capitalize(key.replace(/s$/, '').replace(/List$/, ''))
+                        : getJavaType(value[0], key);
+                    return `List<${itemType}>`;
+                }
+                return 'List<Object>';
+            }
+            if (typeof value === 'object') {
+                return capitalize(key);
+            }
+            return 'Object';
+        }
+
+        function getExampleValue(value) {
+            if (value === null) return 'null';
+            if (typeof value === 'string') return `"${value}"`;
+            if (typeof value === 'number') return value;
+            if (typeof value === 'boolean') return value;
+            if (Array.isArray(value) && value.length > 0) {
+                return getExampleValue(value[0]);
+            }
+            return '';
+        }
+
+        function generateClassForObject(obj, className, indent = '') {
+            let code = `${indent}@Getter\n`;
+            code += `${indent}@Builder\n`;
+            code += `${indent}@Jacksonized\n`;
+            code += `${indent}@JsonIgnoreProperties(ignoreUnknown = true)\n`;
+            code += `${indent}public ${indent ? 'static ' : ''}class ${className} {\n`;
+
+            const nestedClasses = [];
+            
+            for (const [key, value] of Object.entries(obj)) {
+                const javaType = getJavaType(value, key);
+                const example = getExampleValue(value);
+                
+                code += `${indent}    @JsonProperty("${key}")\n`;
+                code += `${indent}    private final ${javaType} ${key};`;
+                
+                if (example) {
+                    code += ` // e.g. ${example}`;
+                }
+                code += '\n';
+
+                // 중첩 클래스 생성
+                if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && !Array.isArray(value[0])) {
+                    const nestedClassName = capitalize(key.replace(/s$/, '').replace(/List$/, ''));
+                    nestedClasses.push(generateClassForObject(value[0], nestedClassName, indent + '    '));
+                } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    const nestedClassName = capitalize(key);
+                    nestedClasses.push(generateClassForObject(value, nestedClassName, indent + '    '));
+                }
+            }
+
+            if (nestedClasses.length > 0) {
+                code += '\n';
+                code += nestedClasses.join('\n\n');
+                code += '\n';
+            }
+
+            code += `${indent}}`;
+            return code;
+        }
+
+        function generateJavaClass() {
+            const className = document.getElementById('className').value.trim();
+            const jsonInput = document.getElementById('jsonInput').value.trim();
+            const errorContainer = document.getElementById('errorContainer');
+            const outputSection = document.getElementById('outputSection');
+            const outputCode = document.getElementById('outputCode');
+
+            errorContainer.innerHTML = '';
+            outputSection.classList.remove('active');
+
+            if (!className) {
+                errorContainer.innerHTML = '<div class="error">Class Name을 입력해주세요.</div>';
+                return;
+            }
+
+            if (!jsonInput) {
+                errorContainer.innerHTML = '<div class="error">JSON을 입력해주세요.</div>';
+                return;
+            }
+
+            try {
+                const jsonObj = JSON.parse(jsonInput);
+                const javaCode = generateClassForObject(jsonObj, className);
+                
+                outputCode.textContent = javaCode;
+                outputSection.classList.add('active');
+            } catch (e) {
+                errorContainer.innerHTML = `<div class="error">JSON 파싱 오류: ${e.message}</div>`;
+            }
+        }
+
+        function copyToClipboard() {
+            const outputCode = document.getElementById('outputCode');
+            const text = outputCode.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                const originalText = btn.textContent;
+                btn.textContent = '복사완료!';
+                btn.classList.add('copied');
+                
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // 샘플 JSON 로드
+        document.getElementById('jsonInput').value = `{"aaaaSingle": "AAAA", "bbbb": [{"aa": 111}, {"aa": 222}, {"aa": 333}], "ccccMap": {"hello": "world", "sub": "sub"}}`;
+    </script>
+</body>
+</html>
