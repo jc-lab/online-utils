@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>클립보드 HTML 뷰어</title>
+    <title>클립보드 전체 데이터 뷰어</title>
     <style>
         * {
             margin: 0;
@@ -81,13 +81,49 @@
             display: block;
         }
 
-        .section-title {
-            font-size: 1.3em;
-            color: #333;
-            margin-bottom: 15px;
+        .data-type-card {
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+
+        .data-type-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+
+        .card-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .type-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .type-badge {
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+
+        .size-badge {
+            background: #e0e0e0;
+            color: #666;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.8em;
         }
 
         .copy-btn {
@@ -111,18 +147,43 @@
         }
 
         .output-box {
-            background: #f5f5f5;
+            background: white;
             border: 1px solid #ddd;
             border-radius: 8px;
-            padding: 20px;
+            padding: 15px;
             font-family: 'Courier New', monospace;
-            font-size: 0.9em;
+            font-size: 0.85em;
             white-space: pre-wrap;
             word-wrap: break-word;
-            max-height: 400px;
+            max-height: 300px;
             overflow-y: auto;
             line-height: 1.6;
+        }
+
+        .image-preview {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .summary {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            border-radius: 6px;
             margin-bottom: 20px;
+        }
+
+        .summary-title {
+            font-weight: 600;
+            color: #2e7d32;
+            margin-bottom: 8px;
+        }
+
+        .summary-text {
+            color: #1b5e20;
+            font-size: 0.95em;
         }
 
         .clear-btn {
@@ -135,6 +196,9 @@
             font-size: 1em;
             margin-top: 20px;
             transition: all 0.3s;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .clear-btn:hover {
@@ -162,12 +226,18 @@
             color: #c62828;
             display: block;
         }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>📋 클립보드 HTML 뷰어</h1>
+            <h1>📋 클립보드 전체 데이터 뷰어</h1>
             <p class="instruction">아래 영역을 클릭하고 Ctrl+V (Mac: Cmd+V)로 붙여넣기하세요</p>
         </div>
 
@@ -179,29 +249,17 @@
         <div id="status" class="status"></div>
 
         <div class="output-section" id="outputSection">
-            <div class="section-title">
-                <span>HTML Raw Data</span>
-                <button class="copy-btn" onclick="copyToClipboard('htmlOutput')">복사</button>
-            </div>
-            <div class="output-box" id="htmlOutput"></div>
-
-            <div class="section-title">
-                <span>Plain Text</span>
-                <button class="copy-btn" onclick="copyToClipboard('textOutput')">복사</button>
-            </div>
-            <div class="output-box" id="textOutput"></div>
-
-            <div style="text-align: center;">
-                <button class="clear-btn" onclick="clearAll()">초기화</button>
-            </div>
+            <div id="summarySection"></div>
+            <div id="dataContainer"></div>
+            <button class="clear-btn" onclick="clearAll()">초기화</button>
         </div>
     </div>
 
     <script>
         const pasteArea = document.getElementById('pasteArea');
         const outputSection = document.getElementById('outputSection');
-        const htmlOutput = document.getElementById('htmlOutput');
-        const textOutput = document.getElementById('textOutput');
+        const dataContainer = document.getElementById('dataContainer');
+        const summarySection = document.getElementById('summarySection');
         const status = document.getElementById('status');
 
         pasteArea.addEventListener('click', () => {
@@ -220,44 +278,142 @@
             e.preventDefault();
             
             const clipboardData = e.clipboardData || window.clipboardData;
+            const types = clipboardData.types;
             
-            let htmlData = clipboardData.getData('text/html');
-            let textData = clipboardData.getData('text/plain');
-            
-            if (htmlData || textData) {
-                if (htmlData) {
-                    htmlOutput.textContent = htmlData;
-                } else {
-                    htmlOutput.textContent = '(HTML 데이터 없음)';
-                }
-                
-                if (textData) {
-                    textOutput.textContent = textData;
-                } else {
-                    textOutput.textContent = '(텍스트 데이터 없음)';
-                }
-                
-                outputSection.classList.add('visible');
-                showStatus('✓ 클립보드 데이터를 성공적으로 읽었습니다!', 'success');
-            } else {
-                showStatus('⚠ 클립보드에 HTML 또는 텍스트 데이터가 없습니다.', 'error');
+            if (!types || types.length === 0) {
+                showStatus('⚠ 클립보드가 비어있습니다.', 'error');
+                return;
             }
+
+            dataContainer.innerHTML = '';
+            
+            // 요약 정보 생성
+            summarySection.innerHTML = `
+                <div class="summary">
+                    <div class="summary-title">📊 클립보드 데이터 요약</div>
+                    <div class="summary-text">총 ${types.length}개의 데이터 타입이 감지되었습니다: ${types.join(', ')}</div>
+                </div>
+            `;
+
+            // 각 타입별로 데이터 추출 및 표시
+            for (const type of types) {
+                await displayDataByType(clipboardData, type);
+            }
+
+            // 이미지 파일이 있는 경우 별도 처리
+            if (clipboardData.files && clipboardData.files.length > 0) {
+                for (let i = 0; i < clipboardData.files.length; i++) {
+                    await displayFileData(clipboardData.files[i], i);
+                }
+            }
+
+            outputSection.classList.add('visible');
+            showStatus(`✓ ${types.length}개의 데이터 타입을 성공적으로 읽었습니다!`, 'success');
         });
 
-        function copyToClipboard(elementId) {
-            const element = document.getElementById(elementId);
-            const text = element.textContent;
+        async function displayDataByType(clipboardData, type) {
+            const card = document.createElement('div');
+            card.className = 'data-type-card';
+
+            let data = clipboardData.getData(type);
+            let displayData = data;
+            let size = new Blob([data]).size;
+
+            const cardHeader = document.createElement('div');
+            cardHeader.className = 'card-header';
+            cardHeader.innerHTML = `
+                <div class="type-info">
+                    <span class="type-badge">${type}</span>
+                    <span class="size-badge">${formatBytes(size)}</span>
+                </div>
+                <button class="copy-btn" onclick="copyText(this, '${escapeHtml(data)}')">복사</button>
+            `;
+            card.appendChild(cardHeader);
+
+            const outputBox = document.createElement('div');
+            outputBox.className = 'output-box';
             
-            navigator.clipboard.writeText(text).then(() => {
-                showStatus('✓ 클립보드에 복사되었습니다!', 'success');
-            }).catch(() => {
-                showStatus('⚠ 복사에 실패했습니다.', 'error');
+            if (data) {
+                // 데이터가 너무 길면 미리보기만 표시
+                if (data.length > 10000) {
+                    displayData = data.substring(0, 10000) + '\n\n... (너무 길어서 일부만 표시됩니다)';
+                }
+                outputBox.textContent = displayData;
+            } else {
+                outputBox.innerHTML = '<span style="color: #999;">데이터 없음</span>';
+            }
+
+            card.appendChild(outputBox);
+            dataContainer.appendChild(card);
+        }
+
+        async function displayFileData(file, index) {
+            const card = document.createElement('div');
+            card.className = 'data-type-card';
+
+            const cardHeader = document.createElement('div');
+            cardHeader.className = 'card-header';
+            cardHeader.innerHTML = `
+                <div class="type-info">
+                    <span class="type-badge">File: ${file.type || 'unknown'}</span>
+                    <span class="size-badge">${file.name} (${formatBytes(file.size)})</span>
+                </div>
+            `;
+            card.appendChild(cardHeader);
+
+            // 이미지 파일인 경우 미리보기 표시
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.className = 'image-preview';
+                    card.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                const outputBox = document.createElement('div');
+                outputBox.className = 'output-box';
+                outputBox.innerHTML = `<span style="color: #666;">파일 타입: ${file.type}<br>파일명: ${file.name}<br>크기: ${formatBytes(file.size)}</span>`;
+                card.appendChild(outputBox);
+            }
+
+            dataContainer.appendChild(card);
+        }
+
+        function copyText(button, text) {
+            const decodedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#039;/g, "'");
+            navigator.clipboard.writeText(decodedText).then(() => {
+                const originalText = button.textContent;
+                button.textContent = '✓ 복사됨';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
             });
         }
 
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
         function clearAll() {
-            htmlOutput.textContent = '';
-            textOutput.textContent = '';
+            dataContainer.innerHTML = '';
+            summarySection.innerHTML = '';
             outputSection.classList.remove('visible');
             status.style.display = 'none';
         }
