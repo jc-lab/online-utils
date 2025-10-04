@@ -316,7 +316,6 @@
             card.className = 'data-type-card';
 
             let data = clipboardData.getData(type);
-            let displayData = data;
             let size = new Blob([data]).size;
 
             const cardHeader = document.createElement('div');
@@ -334,11 +333,7 @@
             outputBox.className = 'output-box';
             
             if (data) {
-                // 데이터가 너무 길면 미리보기만 표시
-                if (data.length > 10000) {
-                    displayData = data.substring(0, 10000) + '\n\n... (너무 길어서 일부만 표시됩니다)';
-                }
-                outputBox.textContent = displayData;
+                outputBox.textContent = data.length;
             } else {
                 outputBox.innerHTML = '<span style="color: #999;">데이터 없음</span>';
             }
