@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HAR 파일 필터링 도구</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        #app {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .container {
+            padding: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .section-title {
+            font-size: 1.3em;
+            color: #667eea;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f8f9fa;
+        }
+        .upload-area input {
+            display: none;
+        }
+        .filter-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+        input[type="text"], select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .request-list {
+            max-height: 400px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 10px;
+        }
+        .request-item {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .request-item:hover {
+            background: #f8f9fa;
+        }
+        .request-item:last-child {
+            border-bottom: none;
+        }
+        .request-item input[type="checkbox"] {
+            margin-right: 12px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .method-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 10px;
+            min-width: 60px;
+            text-align: center;
+        }
+        .method-GET { background: #28a745; color: white; }
+        .method-POST { background: #ffc107; color: black; }
+        .method-PUT { background: #17a2b8; color: white; }
+        .method-DELETE { background: #dc3545; color: white; }
+        .method-PATCH { background: #6f42c1; color: white; }
+        .url-text {
+            flex: 1;
+            font-size: 13px;
+            word-break: break-all;
+            color: #495057;
+        }
+        .header-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+        .header-item {
+            display: flex;
+            align-items: center;
+        }
+        .header-item input[type="checkbox"] {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        .header-item label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 13px;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-right: 10px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .stat-number {
+            font-weight: 700;
+            color: #667eea;
+        }
+        .flex-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <h1>🔍 HAR 파일 필터링 도구</h1>
+            <p>HTTP Archive 파일을 업로드하고 필터링하여 원하는 요청만 추출하세요</p>
+        </div>
+        
+        <div class="container">
+            <div class="section">
+                <div class="section-title">📁 HAR 파일 업로드</div>
+                <div class="upload-area" 
+                    @click="$refs.fileInput.click()"
+                    @dragover.prevent="handleDragOver"
+                    @drop.prevent="handleDrop"
+                    @dragleave="handleDragLeave"
+                    ref="uploadArea"
+                >
+                    <input type="file" ref="fileInput" @change="loadHarFile" accept=".har">
+                    <div v-if="!harData">
+                        <p style="font-size: 1.2em; margin-bottom: 10px;">📂 클릭하여 HAR 파일 선택</p>
+                        <p style="color: #6c757d;">또는 파일을 드래그 앤 드롭하세요</p>
+                    </div>
+                    <div v-else>
+                        <p style="font-size: 1.2em; color: #28a745;">✅ 파일 로드 완료</p>
+                        <p style="color: #6c757d; margin-top: 10px;">다른 파일을 선택하려면 클릭하세요</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section" v-if="harData">
+                <div class="section-title">🔧 1차 필터링 (Method & URL)</div>
+                <div class="filter-group">
+                    <label>HTTP Method (다중 선택)</label>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <template v-for="method in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']" :key="method">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" :id="'method-' + method" :value="method" v-model="selectedMethods" style="width: auto; margin-right: 5px;">
+                                <label :for="'method-' + method" style="margin-bottom: 0;">{{ method }}</label>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>URL Regex 필터</label>
+                    <input type="text" v-model="urlRegexFilter" placeholder="예: .*\\.js$ 또는 api/users">
+                </div>
+                <div class="stats">
+                    <div class="stat-item">
+                        <span>전체:</span>
+                        <span class="stat-number">{{ totalRequests }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>필터링됨:</span>
+                        <span class="stat-number">{{ firstFilteredRequests.length }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section" v-if="firstFilteredRequests.length > 0">
+                <div class="section-title">✅ 2차 필터링 (개별 요청 선택)</div>
+                <div class="flex-buttons" style="margin-bottom: 15px;">
+                    <button class="btn btn-secondary" @click="selectAll">전체 선택</button>
+                    <button class="btn btn-secondary" @click="deselectAll">전체 해제</button>
+                </div>
+                <div class="request-list">
+                    <div class="request-item" v-for="(req, idx) in firstFilteredRequests" :key="idx">
+                        <input type="checkbox" v-model="req.selected">
+                        <span :class="'method-badge method-' + req.method">{{ req.method }}</span>
+                        <span class="url-text">{{ req.url }}</span>
+                    </div>
+                </div>
+                <div class="stats">
+                    <div class="stat-item">
+                        <span>선택됨:</span>
+                        <span class="stat-number">{{ selectedRequests.length }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section" v-if="selectedRequests.length > 0">
+                <div class="section-title">📋 출력 헤더 선택</div>
+                <div class="flex-buttons" style="margin-bottom: 15px;">
+                    <button class="btn btn-secondary" @click="selectAllHeaders">전체 선택</button>
+                    <button class="btn btn-secondary" @click="deselectAllHeaders">전체 해제</button>
+                </div>
+                <div class="header-list">
+                    <div class="header-item" v-for="header in allHeaders" :key="header">
+                        <input type="checkbox" v-model="selectedHeaders[header]" :id="'header-' + header">
+                        <label :for="'header-' + header">{{ header }}</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section" v-if="selectedRequests.length > 0">
+                <div class="section-title">💾 내보내기</div>
+                <button class="btn btn-primary" @click="exportHar">
+                    필터링된 HAR 파일 다운로드 ({{ selectedRequests.length }}개 요청)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    harData: null,
+                    // methodFilter: '', // 단일 선택 필터 삭제
+                    selectedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // 다중 선택 배열로 변경 및 기본값 전체 선택
+                    urlRegexFilter: '',
+                    firstFilteredRequests: [],
+                    allHeaders: [],
+                    selectedHeaders: {},
+                    totalRequests: 0
+                }
+            },
+            computed: {
+                selectedRequests() {
+                    return this.firstFilteredRequests.filter(r => r.selected);
+                }
+            },
+            methods: {
+                async loadHarFile(e) {
+                    // 파일 입력 요소 또는 드롭 이벤트를 통해 파일을 가져옵니다.
+                    const file = e.target.files ? e.target.files[0] : e.dataTransfer.files[0];
+                    if (!file) return;
+
+                    const text = await file.text();
+                    try {
+                        this.harData = JSON.parse(text);
+                        this.totalRequests = this.harData.log.entries.length;
+                        this.applyFirstFilter();
+                        this.extractHeaders();
+                    } catch (err) {
+                        alert('HAR 파일 파싱 오류: ' + err.message);
+                    }
+                },
+                // 드래그 앤 드롭 핸들러 추가
+                handleDragOver(e) {
+                    e.preventDefault(); // 필수: 드롭 허용
+                    this.$refs.uploadArea.style.borderColor = '#764ba2';
+                },
+                handleDragLeave(e) {
+                    this.$refs.uploadArea.style.borderColor = '#667eea';
+                },
+                async handleDrop(e) {
+                    e.preventDefault(); // 필수: 기본 동작 방지
+                    this.$refs.uploadArea.style.borderColor = '#667eea';
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0 && files[0].name.endsWith('.har')) {
+                        // loadHarFile에 드롭된 파일 정보를 전달합니다.
+                        await this.loadHarFile({ dataTransfer: { files: files } });
+                    } else if (files.length > 0) {
+                         alert('유효한 HAR 파일 (.har)을 드롭하세요.');
+                    }
+                },
+                applyFirstFilter() {
+                    if (!this.harData) return;
+
+                    let filtered = this.harData.log.entries;
+
+                    // Method 다중 선택 필터
+                    if (this.selectedMethods.length > 0) {
+                        filtered = filtered.filter(e => this.selectedMethods.includes(e.request.method));
+                    } else {
+                        // 메서드가 하나도 선택되지 않으면, 필터링된 요청 목록을 비웁니다.
+                        filtered = [];
+                    }
+
+                    // URL Regex 필터
+                    if (this.urlRegexFilter) {
+                        try {
+                            const regex = new RegExp(this.urlRegexFilter);
+                            filtered = filtered.filter(e => regex.test(e.request.url));
+                        } catch (err) {
+                            console.error('Regex 오류:', err);
+                        }
+                    }
+
+                    this.firstFilteredRequests = filtered.map(e => ({
+                        entry: e,
+                        method: e.request.method,
+                        url: e.request.url,
+                        selected: true
+                    }));
+                },
+                extractHeaders() {
+                    const headerSet = new Set();
+                    // 필터링된 요청이 아닌, 1차 필터링된 요청(firstFilteredRequests)을 기준으로 헤더 추출
+                    this.firstFilteredRequests.forEach(req => {
+                        req.entry.request.headers.forEach(h => {
+                            headerSet.add(h.name);
+                        });
+                    });
+                    this.allHeaders = Array.from(headerSet).sort();
+                    
+                    // 기존 selectedHeaders 상태 유지 (새로운 헤더는 기본적으로 선택)
+                    const newSelectedHeaders = {};
+                    this.allHeaders.forEach(h => {
+                        newSelectedHeaders[h] = this.selectedHeaders[h] !== undefined ? this.selectedHeaders[h] : true;
+                    });
+                    this.selectedHeaders = newSelectedHeaders;
+                },
+                selectAll() {
+                    this.firstFilteredRequests.forEach(r => r.selected = true);
+                },
+                deselectAll() {
+                    this.firstFilteredRequests.forEach(r => r.selected = false);
+                },
+                selectAllHeaders() {
+                    this.allHeaders.forEach(h => this.selectedHeaders[h] = true);
+                },
+                deselectAllHeaders() {
+                    this.allHeaders.forEach(h => this.selectedHeaders[h] = false);
+                },
+                exportHar() {
+                    const selectedEntries = this.selectedRequests.map(r => {
+                        // 깊은 복사
+                        const entry = JSON.parse(JSON.stringify(r.entry));
+                        
+                        // 선택된 헤더만 필터링
+                        entry.request.headers = entry.request.headers.filter(h => 
+                            this.selectedHeaders[h.name]
+                        );
+                        
+                        return entry;
+                    });
+
+                    const newHar = {
+                        log: {
+                            version: this.harData.log.version,
+                            creator: this.harData.log.creator,
+                            entries: selectedEntries
+                        }
+                    };
+
+                    const blob = new Blob([JSON.stringify(newHar, null, 2)], { 
+                        type: 'application/json' 
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'filtered.har';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+            },
+            watch: {
+                // methodFilter 대신 selectedMethods를 감시하도록 변경
+                selectedMethods() { 
+                    this.applyFirstFilter();
+                    this.extractHeaders();
+                },
+                urlRegexFilter() {
+                    this.applyFirstFilter();
+                    this.extractHeaders();
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
