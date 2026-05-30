@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ULID Decoder & Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .bg-glass {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="min-h-screen py-10 px-4">
+
+<div class="max-w-3xl mx-auto">
+    <!-- Header -->
+    <div class="text-center mb-10">
+        <h1 class="text-4xl font-bold text-slate-900 mb-2 tracking-tight">ULID Tool</h1>
+        <p class="text-slate-500 text-lg">Decode, Generate and Compose ULIDs</p>
+    </div>
+
+    <!-- Main Decoder Section -->
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 mb-6">
+        <div class="mb-6">
+            <label for="ulidInput" class="block text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wider">ULID 입력 (26자)</label>
+            <div class="flex gap-2">
+                <input 
+                    type="text" 
+                    id="ulidInput" 
+                    maxlength="26"
+                    placeholder="예: 01H7X9W5Z6J7..." 
+                    class="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all mono text-xl uppercase"
+                >
+                <button id="randomGenBtn" class="px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-2xl transition-all shadow-lg shadow-indigo-200 active:scale-95 whitespace-nowrap">
+                    랜덤 생성
+                </button>
+            </div>
+            <p id="errorMsg" class="mt-2 text-red-500 text-sm hidden">올바른 ULID 형식이 아닙니다 (26자리, Base32).</p>
+        </div>
+
+        <div id="resultArea" class="space-y-6 hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Timestamp Card -->
+                <div class="p-6 bg-indigo-50 rounded-2xl border border-indigo-100">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="p-1.5 bg-indigo-600 rounded-lg text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
+                        <h3 class="text-sm font-bold text-indigo-900 uppercase">Timestamp (48-bit)</h3>
+                    </div>
+                    <div id="readableDate" class="text-xl font-semibold text-slate-800 mb-1 leading-tight">-</div>
+                    <div id="unixMs" class="text-sm text-indigo-600 mono">- ms</div>
+                </div>
+
+                <!-- Randomness Card -->
+                <div class="p-6 bg-emerald-50 rounded-2xl border border-emerald-100">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="p-1.5 bg-emerald-600 rounded-lg text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                        </div>
+                        <h3 class="text-sm font-bold text-emerald-900 uppercase">Randomness (80-bit)</h3>
+                    </div>
+                    <div id="randomHex" class="text-lg font-semibold text-slate-800 mb-1 mono break-all leading-tight">-</div>
+                    <div class="text-xs text-emerald-600 font-medium">Hexadecimal Value</div>
+                </div>
+            </div>
+
+            <!-- Visualization Bar -->
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div class="flex h-3 rounded-full overflow-hidden mb-3">
+                    <div class="w-[38%] bg-indigo-500" title="Timestamp Part"></div>
+                    <div class="w-[62%] bg-emerald-500" title="Randomness Part"></div>
+                </div>
+                <div class="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <div class="flex gap-4">
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-indigo-500"></span>Time (10 chars)</span>
+                        <span id="visTime" class="text-indigo-600 mono text-sm">-</span>
+                    </div>
+                    <div class="flex gap-4">
+                        <span id="visRand" class="text-emerald-600 mono text-sm">-</span>
+                        <span class="flex items-center gap-1">Random (16 chars)<span class="w-2 h-2 rounded-full bg-emerald-500"></span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Generator Section -->
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 mb-6">
+        <div class="flex items-center gap-2 mb-6">
+            <div class="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8m0 0V4m0 8h8m-8 0H4"/></svg>
+            </div>
+            <h2 class="text-xl font-bold text-slate-800">Custom Generator</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+                <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-widest">Unix Timestamp (ms)</label>
+                <input 
+                    type="number" 
+                    id="customTimeInput"
+                    class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-200 outline-none mono"
+                >
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-widest">Randomness (80-bit Hex)</label>
+                <div class="flex gap-2">
+                    <input 
+                        type="text" 
+                        id="customRandInput"
+                        maxlength="20"
+                        class="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-200 outline-none mono uppercase"
+                        placeholder="20 chars hex"
+                    >
+                    <button id="refreshRandBtn" class="p-3 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-600"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+            <span class="block text-xs font-bold text-amber-700 mb-1 uppercase tracking-widest text-center">조합된 결과 (Composed ULID)</span>
+            <div id="composedResult" class="text-2xl font-bold text-amber-900 text-center mono break-all tracking-tight select-all cursor-pointer hover:bg-amber-100 p-2 rounded-lg transition-colors" title="클릭하여 복사">
+                -
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="bg-white/50 border border-slate-200 rounded-2xl p-6 text-sm text-slate-600 leading-relaxed">
+        <h4 class="font-bold text-slate-800 mb-2">ULID의 구조</h4>
+        <ul class="space-y-2 list-disc list-inside">
+            <li><strong>총 128비트:</strong> UUID와 호환되지만 사전식 정렬이 가능합니다.</li>
+            <li><strong>Crockford's Base32:</strong> 혼동하기 쉬운 글자(I, L, O, U)를 제외한 32개 문자를 사용합니다.</li>
+            <li><strong>시간순 정렬:</strong> 앞쪽 10개 문자가 시간을 나타내므로 생성 순서대로 정렬됩니다.</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+    const ENCODING = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+    const DECODING = Array.from(ENCODING).reduce((acc, char, idx) => {
+        acc[char] = BigInt(idx);
+        return acc;
+    }, {});
+
+    const input = document.getElementById('ulidInput');
+    const randomGenBtn = document.getElementById('randomGenBtn');
+    const resultArea = document.getElementById('resultArea');
+    const errorMsg = document.getElementById('errorMsg');
+
+    const readableDate = document.getElementById('readableDate');
+    const unixMs = document.getElementById('unixMs');
+    const randomHex = document.getElementById('randomHex');
+    const visTime = document.getElementById('visTime');
+    const visRand = document.getElementById('visRand');
+
+    const customTimeInput = document.getElementById('customTimeInput');
+    const customRandInput = document.getElementById('customRandInput');
+    const refreshRandBtn = document.getElementById('refreshRandBtn');
+    const composedResult = document.getElementById('composedResult');
+
+    // Helper: Encode BigInt to Base32
+    function encodeBase32(value, length) {
+        let str = "";
+        let val = BigInt(value);
+        for (let i = 0; i < length; i++) {
+            str = ENCODING[Number(val % 32n)] + str;
+            val = val / 32n;
+        }
+        return str;
+    }
+
+    function decodeULID(ulid) {
+        try {
+            if (ulid.length !== 26) throw new Error("Length error");
+            
+            // Validate characters
+            for (let char of ulid) {
+                if (DECODING[char] === undefined) throw new Error("Invalid character: " + char);
+            }
+
+            // Calculate Timestamp (First 10 chars)
+            const timePart = ulid.substring(0, 10);
+            let timeVal = 0n;
+            for (let char of timePart) {
+                timeVal = (timeVal * 32n) + DECODING[char];
+            }
+
+            // Calculate Randomness (Next 16 chars)
+            const randPart = ulid.substring(10);
+            let randVal = 0n;
+            for (let char of randPart) {
+                randVal = (randVal * 32n) + DECODING[char];
+            }
+
+            updateUI(ulid, timeVal, randVal);
+            
+            // Sync with Manual Inputs
+            customTimeInput.value = timeVal.toString();
+            customRandInput.value = randVal.toString(16).padStart(20, '0').toUpperCase();
+            updateComposedResult();
+
+            errorMsg.classList.add('hidden');
+            resultArea.classList.remove('hidden');
+        } catch (e) {
+            console.error(e);
+            errorMsg.classList.remove('hidden');
+            resultArea.classList.add('hidden');
+        }
+    }
+
+    function updateUI(ulid, time, rand) {
+        const date = new Date(Number(time));
+        
+        readableDate.textContent = date.toLocaleString('ko-KR', { 
+            year: 'numeric', month: '2-digit', day: '2-digit', 
+            hour: '2-digit', minute: '2-digit', second: '2-digit', 
+            hour12: false 
+        }) + '.' + String(date.getMilliseconds()).padStart(3, '0');
+
+        unixMs.textContent = `${time} ms`;
+        randomHex.textContent = '0x' + rand.toString(16).padStart(20, '0').toUpperCase();
+        
+        visTime.textContent = ulid.substring(0, 10);
+        visRand.textContent = ulid.substring(10);
+    }
+
+    function updateComposedResult() {
+        try {
+            const t = BigInt(customTimeInput.value || 0);
+            const rHex = customRandInput.value.padStart(20, '0');
+            const r = BigInt('0x' + rHex);
+            
+            const ulid = encodeBase32(t, 10) + encodeBase32(r, 16);
+            composedResult.textContent = ulid;
+        } catch (e) {
+            composedResult.textContent = "INVALID INPUT";
+        }
+    }
+
+    input.addEventListener('input', (e) => {
+        let val = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '');
+        // Replace ambiguous characters
+        val = val.replace(/I/g, '1').replace(/L/g, '1').replace(/O/g, '0');
+        input.value = val;
+        
+        if (val.length === 26) {
+            decodeULID(val);
+        } else {
+            resultArea.classList.add('hidden');
+            errorMsg.classList.add('hidden');
+        }
+    });
+
+    randomGenBtn.addEventListener('click', () => {
+        const now = BigInt(Date.now());
+        const randHexStr = Array.from({length: 20}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+        const randVal = BigInt('0x' + randHexStr);
+        
+        const ulid = encodeBase32(now, 10) + encodeBase32(randVal, 16);
+        input.value = ulid;
+        decodeULID(ulid);
+    });
+
+    customTimeInput.addEventListener('input', updateComposedResult);
+    customRandInput.addEventListener('input', (e) => {
+        e.target.value = e.target.value.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+        updateComposedResult();
+    });
+
+    refreshRandBtn.addEventListener('click', () => {
+        const randHexStr = Array.from({length: 20}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+        customRandInput.value = randHexStr.toUpperCase();
+        updateComposedResult();
+    });
+
+    composedResult.addEventListener('click', () => {
+        const text = composedResult.textContent;
+        if (text === "-" || text === "INVALID INPUT") return;
+        
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        const original = composedResult.textContent;
+        composedResult.textContent = "COPIED!";
+        setTimeout(() => composedResult.textContent = original, 1000);
+        
+        input.value = text;
+        decodeULID(text);
+    });
+
+    // Initial setup
+    window.onload = () => {
+        customTimeInput.value = Date.now();
+        refreshRandBtn.click();
+        randomGenBtn.click();
+    };
+</script>
+
+</body>
+</html>
